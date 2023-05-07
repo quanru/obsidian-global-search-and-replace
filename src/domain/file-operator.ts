@@ -34,36 +34,42 @@ export class FileOperator {
 
 		const markdownFiles = this.app.vault.getMarkdownFiles();
 		const searchResults: SearchResult[] = [];
+		const tasks = [];
 
 		let numberOfFilesWithMatches = 0;
-
 		for (const file of markdownFiles) {
-			const contents = await this.app.vault.read(file);
-			const lines = this.splitIntoLines(contents);
-			let foundAMatchInThisFile = false;
-
-			lines.forEach((line, i) => {
-				const intermediateResults: SearchResult[] = this.searchInLine(
-					line,
-					i + 1,
-					file,
-					query,
-					queryRegex
-				);
-
-				if (intermediateResults.length !== 0) {
-					foundAMatchInThisFile = true;
+			tasks.push(async () => {
+				const contents = await this.app.vault.read(file);
+				if (contents.match(queryRegex)?.length) {
+					const lines = this.splitIntoLines(contents);
+					let foundAMatchInThisFile = false;
+		
+					lines.forEach((line, i) => {
+						const intermediateResults: SearchResult[] = this.searchInLine(
+							line,
+							i + 1,
+							file,
+							query,
+							queryRegex
+						);
+		
+						if (intermediateResults.length !== 0) {
+							foundAMatchInThisFile = true;
+						}
+		
+						searchResults.push(...intermediateResults);
+					});
+		
+					if (foundAMatchInThisFile) {
+						numberOfFilesWithMatches++;
+					}
+		
+					foundAMatchInThisFile = false;
 				}
-
-				searchResults.push(...intermediateResults);
-			});
-
-			if (foundAMatchInThisFile) {
-				numberOfFilesWithMatches++;
-			}
-
-			foundAMatchInThisFile = false;
+			})
 		}
+
+		await Promise.all(tasks.map(task => task()));
 
 		return { searchResults, numberOfFilesWithMatches };
 	}
